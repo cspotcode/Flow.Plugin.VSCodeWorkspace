@@ -100,36 +100,57 @@ namespace Flow.Plugin.VSCodeWorkspaces.WorkspacesHelper
                         }
                     }
 
-                    // for vscode v1.64.0 or later
-                    using var connection = new SqliteConnection(
-                        $"Data Source={vscodeInstance.AppData}/User/globalStorage/state.vscdb;mode=readonly;cache=shared;");
-                    connection.Open();
-                    var command = connection.CreateCommand();
-                    command.CommandText = "SELECT value FROM ItemTable where key = 'history.recentlyOpenedPathsList'";
-                    var result = command.ExecuteScalar();
-                    if (result != null)
+                    // for vscode v1.64.0 or later (legacy globalStorage)
+                    // and vscode v1.118 or later (shared storage)
+                    var vscode_storage_db = Path.Combine(vscodeInstance.AppData, "User/globalStorage/state.vscdb");
+                    var vscode_shared_storage_db = vscodeInstance.SharedStorageDbPath;
+
+                    var storageDbPaths = new[] { vscode_storage_db, vscode_shared_storage_db }
+                        .Where(filePath => !string.IsNullOrEmpty(filePath))
+                        .Distinct(StringComparer.OrdinalIgnoreCase);
+
+                    foreach (var storageDbPath in storageDbPaths)
                     {
-                        using var historyDoc = JsonDocument.Parse(result.ToString()!);
-                        var root = historyDoc.RootElement;
-                        if (!root.TryGetProperty("entries", out var entries))
+                        if (!File.Exists(storageDbPath))
                             continue;
-                        foreach (var entry in entries.EnumerateArray())
+
+                        using var connection = new SqliteConnection(
+                            $"Data Source={storageDbPath};mode=readonly;cache=shared;");
+                        connection.Open();
+                        var command = connection.CreateCommand();
+                        command.CommandText = "SELECT value FROM ItemTable where key = 'history.recentlyOpenedPathsList'";
+                        var result = command.ExecuteScalar();
+                        if (result != null)
                         {
-                            if (entry.TryGetProperty("folderUri", out var folderUri) &&
-                                ParseFolderEntry(folderUri, vscodeInstance, entry) is { } folderWorkspace)
+                            using var historyDoc = JsonDocument.Parse(result.ToString()!);
+                            var root = historyDoc.RootElement;
+                            if (root.TryGetProperty("entries", out var entries))
                             {
-                                results.Add(folderWorkspace);
-                            }
-                            else if (entry.TryGetProperty("workspace", out var workspaceInfo) &&
-                                     ParseWorkspaceEntry(workspaceInfo, vscodeInstance, entry) is { } workspace)
-                            {
-                                results.Add(workspace);
+                                foreach (var entry in entries.EnumerateArray())
+                                {
+                                    if (entry.TryGetProperty("folderUri", out var folderUri) &&
+                                        ParseFolderEntry(folderUri, vscodeInstance, entry) is { } folderWorkspace)
+                                    {
+                                        results.Add(folderWorkspace);
+                                    }
+                                    else if (entry.TryGetProperty("workspace", out var workspaceInfo) &&
+                                             ParseWorkspaceEntry(workspaceInfo, vscodeInstance, entry) is { } workspace)
+                                    {
+                                        results.Add(workspace);
+                                    }
+                                }
                             }
                         }
                     }
                 }
 
-                return results;
+                return results
+                    .Where(workspace => workspace != null)
+                    .GroupBy(workspace =>
+                        $"{workspace.VSCodeInstance?.ExecutablePath ?? ""}|{workspace.WorkspaceType}|{workspace.Path}",
+                        StringComparer.OrdinalIgnoreCase)
+                    .Select(group => group.First())
+                    .ToList();
             }
         }
 
