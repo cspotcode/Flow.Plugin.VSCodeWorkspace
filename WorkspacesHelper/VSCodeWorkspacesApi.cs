@@ -43,6 +43,7 @@ namespace Flow.Plugin.VSCodeWorkspaces.WorkspacesHelper
                     FolderName = folderName,
                     ExtraInfo = typeWorkspace.MachineName,
                     WorkspaceLocation = typeWorkspace.workspaceLocation.Value,
+                    WorkspaceType = WorkspaceType.Folder,
                     VSCodeInstance = vscodeInstance,
                 };
             }
@@ -164,6 +165,8 @@ namespace Flow.Plugin.VSCodeWorkspaces.WorkspacesHelper
                 if (workspace == null)
                     return null;
 
+                workspace = workspace with { WorkspaceType = WorkspaceType.Workspace };
+
                 if (entry.TryGetProperty("label", out var label))
                 {
                     var labelString = label.GetString()!;
@@ -171,7 +174,6 @@ namespace Flow.Plugin.VSCodeWorkspaces.WorkspacesHelper
                     workspace = workspace with
                     {
                         Label = $"{matchGroup.Groups[2]} {matchGroup.Groups[1]}",
-                        WorkspaceType = WorkspaceType.Workspace
                     };
                 }
 
@@ -198,7 +200,6 @@ namespace Flow.Plugin.VSCodeWorkspaces.WorkspacesHelper
                 workspace = workspace with
                 {
                     Label = $"{matchGroup.Groups[2]} {matchGroup.Groups[1]}",
-                    WorkspaceType = WorkspaceType.Folder
                 };
             }
 

@@ -6,7 +6,7 @@ using System.Text.RegularExpressions;
 
 namespace Flow.Plugin.VSCodeWorkspaces
 {
-    internal class SystemPath
+    public class SystemPath
     {
         private static readonly Regex WindowsPath = new Regex(@"^([a-zA-Z]:)", RegexOptions.Compiled);
 
